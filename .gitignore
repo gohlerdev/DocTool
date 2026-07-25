@@ -62,3 +62,11 @@ coverage
 # Local vault / app data (never commit)
 .doctool/
 *.vault-key
+
+# Android generated (keep structure, ignore heavy outputs)
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/build/
+src-tauri/target/
+*.apk
+*.aab
