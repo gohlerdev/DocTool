@@ -1018,6 +1018,11 @@ Document Xcode / Android Studio requirements in README.
 
 ## 20. Phased roadmap (task-level)
 
+**Canonical implementation breakdown (phases + subphases + tasks):**  
+→ **[phases/README.md](./phases/README.md)** and **[phases/TRACKING.md](./phases/TRACKING.md)**
+
+Summary below is retained for narrative; execute against `docs/phases/phase-0N-*.md`.
+
 Estimates assume 1 focused engineer. Adjust freely.
 
 ---

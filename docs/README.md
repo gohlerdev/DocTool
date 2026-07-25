@@ -15,7 +15,9 @@ Local source of truth for product design, architecture, and implementation.
 | [data-model.md](./data-model.md) | SQLite schema, migrations, entities |
 | [ipc.md](./ipc.md) | Tauri IPC command surface |
 | [threat-model.md](./threat-model.md) | Security threat model & checklist |
-| [phases.md](./phases.md) | Extremely detailed phase-by-phase tasks |
+| [phases.md](./phases.md) | Phases hub (links to subphase docs) |
+| [phases/README.md](./phases/README.md) | **Implementation phases & subphases index** |
+| [phases/TRACKING.md](./phases/TRACKING.md) | Live implementation status board |
 | [testing.md](./testing.md) | Test strategy, fixtures, CI gates |
 | [roadmap.md](./roadmap.md) | Timeline, milestones, DoD |
 

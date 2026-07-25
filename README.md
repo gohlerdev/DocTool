@@ -15,7 +15,9 @@ Early scaffolding. Full local documentation suite:
 |-----|-------------|
 | **[docs/README.md](docs/README.md)** | Documentation index |
 | **[docs/PLAN.md](docs/PLAN.md)** | Master implementation plan |
-| **[docs/phases.md](docs/phases.md)** | Task-level phase checklist |
+| **[docs/phases.md](docs/phases.md)** | Phases hub |
+| **[docs/phases/README.md](docs/phases/README.md)** | Phases & subphases for implementation |
+| **[docs/phases/TRACKING.md](docs/phases/TRACKING.md)** | Status board |
 | **[docs/decisions.md](docs/decisions.md)** | Locked ADRs |
 | **[docs/architecture.md](docs/architecture.md)** | System architecture |
 | **[docs/vault-format.md](docs/vault-format.md)** | E2EE vault format |

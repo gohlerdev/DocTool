@@ -88,10 +88,11 @@
 ## 6. Document ownership
 
 | Doc | Owner role |
-|-----|------------|
+|------|------------|
 | PLAN.md | Architect summary |
-| phases.md | Implementation tracking |
+| phases/README.md + phase-0N-*.md | Implementation task breakdown |
+| phases/TRACKING.md | Live status |
 | vault-format.md | Crypto changes only with version bump |
 | decisions.md | New ADRs on product change |
 
-When implementation completes a phase, check boxes in `phases.md` and add a short note to CHANGELOG.
+When implementation completes a subphase, update [phases/TRACKING.md](./phases/TRACKING.md) and tick boxes in the phase file. When a full phase exits, note it in CHANGELOG.
