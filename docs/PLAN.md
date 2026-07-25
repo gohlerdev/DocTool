@@ -1,13 +1,13 @@
 # DocTool — Extremely Detailed Implementation Plan
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** 2026-07-25  
 **Repo:** https://github.com/gohlerdev/DocTool  
 **License:** MIT  
 **Branch:** `main`  
 **Status:** Scaffold present; implementation not started beyond Hello World  
 
-This document is the single source of truth for building DocTool. Implementers should follow phases in order. Do not skip security modules. Do not invent alternate crypto without updating §8 and threat model.
+This document is the **master overview** for building DocTool. Deep specifications live in sibling docs (see [README.md](./README.md) index). Implementers should follow [phases.md](./phases.md) in order. Do not skip security modules. Do not invent alternate crypto without updating [vault-format.md](./vault-format.md) and [threat-model.md](./threat-model.md).
 
 ---
 

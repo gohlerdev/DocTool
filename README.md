@@ -9,7 +9,25 @@ Read and edit markdown, PDFs, and common developer documents. Capture Keep-style
 
 ## Status
 
-Early scaffolding. Architecture and implementation plan: **[docs/PLAN.md](docs/PLAN.md)**.
+Early scaffolding. Full local documentation suite:
+
+| Doc | Description |
+|-----|-------------|
+| **[docs/README.md](docs/README.md)** | Documentation index |
+| **[docs/PLAN.md](docs/PLAN.md)** | Master implementation plan |
+| **[docs/phases.md](docs/phases.md)** | Task-level phase checklist |
+| **[docs/decisions.md](docs/decisions.md)** | Locked ADRs |
+| **[docs/architecture.md](docs/architecture.md)** | System architecture |
+| **[docs/vault-format.md](docs/vault-format.md)** | E2EE vault format |
+| **[docs/notes-sync.md](docs/notes-sync.md)** | Dual-write notes protocol |
+| **[docs/sftp.md](docs/sftp.md)** | SFTP subsystem |
+| **[docs/formats.md](docs/formats.md)** | Document adapters |
+| **[docs/ui-ux.md](docs/ui-ux.md)** | Desktop & mobile UX |
+| **[docs/data-model.md](docs/data-model.md)** | SQLite schema |
+| **[docs/ipc.md](docs/ipc.md)** | Tauri IPC surface |
+| **[docs/threat-model.md](docs/threat-model.md)** | Security model |
+| **[docs/testing.md](docs/testing.md)** | Test strategy |
+| **[docs/roadmap.md](docs/roadmap.md)** | Milestones & DoD |
 
 ## Platforms
 
