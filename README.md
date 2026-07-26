@@ -9,27 +9,23 @@ Read and edit markdown, PDFs, and common developer documents. Capture Keep-style
 
 ## Status
 
-Early scaffolding. Full local documentation suite:
+**Phase 8 gap-closure in progress** toward `v1.0.0`. Core app ships: notes, files/SFTP/WebDAV, PDF, E2EE vault, onboarding, multi-theme mobile shell. See **[CHANGELOG.md](CHANGELOG.md)** and **[docs/phases/TRACKING.md](docs/phases/TRACKING.md)**.
 
 | Doc | Description |
 |-----|-------------|
 | **[docs/README.md](docs/README.md)** | Documentation index |
+| **[docs/v1-gap-closure-plan.md](docs/v1-gap-closure-plan.md)** | **v1.0 gap closure plan of record** |
+| **[docs/phases/phase-08-v1-gap-closure.md](docs/phases/phase-08-v1-gap-closure.md)** | Phase 8 ID checklist |
+| **[docs/release-pipeline.md](docs/release-pipeline.md)** | Signed Android / store packaging |
 | **[docs/PLAN.md](docs/PLAN.md)** | Master implementation plan |
-| **[docs/phases.md](docs/phases.md)** | Phases hub |
-| **[docs/phases/README.md](docs/phases/README.md)** | Phases & subphases for implementation |
-| **[docs/phases/TRACKING.md](docs/phases/TRACKING.md)** | Status board |
+| **[docs/phases/TRACKING.md](docs/phases/TRACKING.md)** | Live status board |
 | **[docs/decisions.md](docs/decisions.md)** | Locked ADRs |
 | **[docs/architecture.md](docs/architecture.md)** | System architecture |
 | **[docs/vault-format.md](docs/vault-format.md)** | E2EE vault format |
-| **[docs/notes-sync.md](docs/notes-sync.md)** | Dual-write notes protocol |
-| **[docs/sftp.md](docs/sftp.md)** | SFTP subsystem |
-| **[docs/formats.md](docs/formats.md)** | Document adapters |
-| **[docs/ui-ux.md](docs/ui-ux.md)** | Desktop & mobile UX |
-| **[docs/data-model.md](docs/data-model.md)** | SQLite schema |
-| **[docs/ipc.md](docs/ipc.md)** | Tauri IPC surface |
 | **[docs/threat-model.md](docs/threat-model.md)** | Security model |
-| **[docs/testing.md](docs/testing.md)** | Test strategy |
 | **[docs/roadmap.md](docs/roadmap.md)** | Milestones & DoD |
+
+**Cloud claims:** Google Drive OAuth upload is scaffolded (token link surface). Market dual-sync only after V4 acceptance.
 
 ## Platforms
 

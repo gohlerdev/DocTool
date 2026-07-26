@@ -17,7 +17,8 @@
 | **4** | PDF view & edit | `todo` | 4A–4C | [phase-04-pdf.md](./phase-04-pdf.md) |
 | **5** | Vault E2EE + dual-sync | `todo` | 5A–5F | [phase-05-vault-sync.md](./phase-05-vault-sync.md) |
 | **6** | Formats & polish | `todo` | 6A–6D | [phase-06-polish.md](./phase-06-polish.md) |
-| **7** | v1.0 hardening & release | `todo` | 7A–7C | [phase-07-release.md](./phase-07-release.md) |
+| **7** | v1.0 hardening & release | `in_progress` | 7A–7C | [phase-07-release.md](./phase-07-release.md) |
+| **8** | **v1.0 gap closure (all backlog)** | `todo` | 8A–8G | [phase-08-v1-gap-closure.md](./phase-08-v1-gap-closure.md) · [../v1-gap-closure-plan.md](../v1-gap-closure-plan.md) |
 
 ---
 

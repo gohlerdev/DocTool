@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DocTool Clipper</title>
+    <style>
+      body {
+        font: 13px system-ui, sans-serif;
+        margin: 12px;
+        width: 260px;
+      }
+      button {
+        width: 100%;
+        min-height: 36px;
+        margin-top: 8px;
+      }
+      textarea {
+        width: 100%;
+        height: 80px;
+      }
+    </style>
+  </head>
+  <body>
+    <strong>Save to DocTool</strong>
+    <p id="status">Selection / page title will be staged for the app.</p>
+    <textarea id="out" readonly></textarea>
+    <button id="clip">Clip page</button>
+    <script src="popup.js"></script>
+  </body>
+</html>

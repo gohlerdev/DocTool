@@ -1,12 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta name="color-scheme" content="dark light" />
     <title>DocTool</title>
+    <script>
+      try {
+        var t = localStorage.getItem("doctool-theme-boot");
+        if (t) document.documentElement.dataset.theme = t;
+        else if (window.matchMedia("(prefers-color-scheme: light)").matches)
+          document.documentElement.dataset.theme = "daylight";
+        else document.documentElement.dataset.theme = "midnight";
+      } catch (e) {}
+    </script>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

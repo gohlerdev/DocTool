@@ -72,16 +72,20 @@
 
 ---
 
-## 5. Post-v1 backlog (not committed)
+## 5. Former post-v1 — **committed to v1.0**
 
-- Windows target  
-- WebDAV / Nextcloud  
-- Cryptomator import  
-- Full OCR  
-- Real-time collaboration  
-- Terminal pane  
-- Browser extension clipper  
-- End-to-end automated mobile CI  
+All of the following are **in scope for v1.0** under [v1-gap-closure-plan.md](./v1-gap-closure-plan.md) (IDs X1–X7 + full improvement portfolio). Nothing below is deferred past `v1.0.0`:
+
+- Windows target (X1)  
+- WebDAV / Nextcloud (F7)  
+- Cryptomator import (X2)  
+- Full OCR (X3)  
+- Multi-device collab via dual-sync + conflict UI (X5-lite; not live CRDT)  
+- Terminal pane (X6)  
+- Browser extension clipper (X4)  
+- End-to-end automated mobile CI (X7)  
+
+**Execution:** Phase 8 waves W1→W6, then tag `v1.0.0`.
 
 ---
 

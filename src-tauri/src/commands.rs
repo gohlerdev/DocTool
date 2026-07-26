@@ -1,7 +1,8 @@
 use crate::crypto::header::{
-    create_vault, decrypt_blob, encrypt_blob, unlock_with_password, unlock_with_recovery,
-    VaultHeader,
+    create_vault, decrypt_blob, encrypt_blob, rewrap_password, unlock_with_password, unlock_with_recovery,
+    VaultHeader, FORMAT_VERSION,
 };
+use crate::crypto::local_secrets::{open_secret, seal_secret};
 use crate::crypto::session::{ManifestEntry, VaultSession};
 use crate::db::now_iso;
 use crate::error::{AppError, AppResult};
@@ -79,14 +80,14 @@ pub fn notes_list(
 
 #[tauri::command]
 pub fn notes_get(state: State<'_, AppState>, id: String) -> AppResult<Note> {
-    notes::get_note(&state.db.lock(), &id)
+    notes::get_note(&state.db.lock(), &state.data_dir, &id)
 }
 
 #[tauri::command]
 pub fn notes_upsert(state: State<'_, AppState>, input: NoteUpsert) -> AppResult<Note> {
     let note = {
         let db = state.db.lock();
-        notes::upsert_note(&db, input)?
+        notes::upsert_note(&db, &state.data_dir, input)?
     };
     // try dual-write if vault unlocked
     let _ = sync_note_to_vault(&state, &note);
@@ -234,14 +235,24 @@ pub struct SftpProfileSave {
 
 #[tauri::command]
 pub fn sftp_profile_save(state: State<'_, AppState>, input: SftpProfileSave) -> AppResult<String> {
+    let data_dir = state.data_dir.clone();
     let db = state.db.lock();
     let id = input.id.unwrap_or_else(|| Ulid::new().to_string());
     let now = now_iso();
     let port = input.port.unwrap_or(22) as i64;
-    // store secrets base64 in DB encrypted-at-rest would be better; for mobile we use app-private DB
-    let pw = input.password.map(|p| B64.encode(p.as_bytes()));
-    let key = input.private_key_pem.map(|p| B64.encode(p.as_bytes()));
-    let pp = input.passphrase.map(|p| B64.encode(p.as_bytes()));
+    // AES-256-GCM sealed secrets (device key in app sandbox) — never plaintext / bare base64
+    let pw = input
+        .password
+        .map(|p| seal_secret(&data_dir, "sftp.password", &p))
+        .transpose()?;
+    let key = input
+        .private_key_pem
+        .map(|p| seal_secret(&data_dir, "sftp.private_key", &p))
+        .transpose()?;
+    let pp = input
+        .passphrase
+        .map(|p| seal_secret(&data_dir, "sftp.passphrase", &p))
+        .transpose()?;
 
     let exists: bool = db.conn().query_row(
         "SELECT COUNT(1) FROM sftp_profiles WHERE id=?1",
@@ -310,21 +321,10 @@ pub fn sftp_connect(
         ).map_err(|_| AppError::NotFound)?
     };
 
-    let password = pw.and_then(|p| {
-        B64.decode(p.as_bytes())
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-    });
-    let private_key = key.and_then(|p| {
-        B64.decode(p.as_bytes())
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-    });
-    let passphrase = pp.and_then(|p| {
-        B64.decode(p.as_bytes())
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-    });
+    let data_dir = state.data_dir.clone();
+    let password = pw.and_then(|p| open_secret(&data_dir, "sftp.password", &p).ok());
+    let private_key = key.and_then(|p| open_secret(&data_dir, "sftp.private_key", &p).ok());
+    let passphrase = pp.and_then(|p| open_secret(&data_dir, "sftp.passphrase", &p).ok());
 
     let _ = auth_type;
     let _ = default_path;
@@ -546,8 +546,38 @@ pub fn vault_unlock(
 
 #[tauri::command]
 pub fn vault_lock(state: State<'_, AppState>) -> AppResult<()> {
-    *state.vault.lock() = None;
+    // Drop session so MasterKey ZeroizeOnDrop wipes MK from memory
+    let mut guard = state.vault.lock();
+    if let Some(session) = guard.take() {
+        drop(session);
+    }
     Ok(())
+}
+
+/// Crypto status for UI / verification (no secrets).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CryptoInfo {
+    pub vault_format_version: u32,
+    pub kdf: String,
+    pub kdf_memory_mib: u32,
+    pub kdf_iterations: u32,
+    pub aead: String,
+    pub local_secrets: String,
+    pub blob_format: String,
+}
+
+#[tauri::command]
+pub fn crypto_info() -> CryptoInfo {
+    CryptoInfo {
+        vault_format_version: FORMAT_VERSION,
+        kdf: "Argon2id + HKDF-SHA256".into(),
+        kdf_memory_mib: 128,
+        kdf_iterations: 3,
+        aead: "AES-256-GCM".into(),
+        local_secrets: "AES-256-GCM device key (app sandbox)".into(),
+        blob_format: "v2 per-object DEK, purpose-bound AAD (local=Drive identical)".into(),
+    }
 }
 
 #[tauri::command]
@@ -597,7 +627,7 @@ pub fn notes_sync_now(state: State<'_, AppState>) -> AppResult<serde_json::Value
     pulled += pull_vault_notes(&state).unwrap_or(0);
     let ids = notes::list_pending_sync(&state.db.lock())?;
     for id in ids {
-        if let Ok(note) = notes::get_note(&state.db.lock(), &id) {
+        if let Ok(note) = notes::get_note(&state.db.lock(), &state.data_dir, &id) {
             if sync_note_to_vault(&state, &note).is_ok() {
                 pushed += 1;
             }
@@ -631,7 +661,8 @@ fn put_vault_object(
     let (blob, entry) = {
         let mut vault = state.vault.lock();
         let session = vault.as_mut().ok_or(AppError::VaultLocked)?;
-        let blob = encrypt_blob(&session.master_key, data)?;
+        let purpose = if kind == "note" { "note" } else { "file" };
+        let blob = crate::crypto::header::encrypt_blob_purpose(&session.master_key, data, purpose)?;
         let entry = ManifestEntry {
             logical_path: logical_path.to_string(),
             object_id: object_id.clone(),
@@ -685,8 +716,396 @@ fn pull_vault_notes(state: &AppState) -> AppResult<i32> {
             let session = vault.as_ref().ok_or(AppError::VaultLocked)?;
             decrypt_blob(&session.master_key, &blob)?
         };
-        notes::import_note_from_payload(&state.db.lock(), &plain)?;
+        notes::import_note_from_payload_dir(&state.db.lock(), &state.data_dir, &plain)?;
         count += 1;
     }
     Ok(count)
 }
+
+// ── Phase 8 notes extras ────────────────────────────────
+
+#[tauri::command]
+pub fn notes_labels(state: State<'_, AppState>) -> AppResult<Vec<String>> {
+    notes::list_all_labels(&state.db.lock())
+}
+
+#[tauri::command]
+pub fn notes_restore(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    notes::restore_note(&state.db.lock(), &id)
+}
+
+#[tauri::command]
+pub fn notes_trash(state: State<'_, AppState>) -> AppResult<Vec<NoteSummary>> {
+    notes::list_trash(&state.db.lock())
+}
+
+#[tauri::command]
+pub fn notes_purge_trash(state: State<'_, AppState>, days: Option<i64>) -> AppResult<u32> {
+    notes::purge_old_trash(&state.db.lock(), days.unwrap_or(30))
+}
+
+#[tauri::command]
+pub fn notes_bulk(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    pinned: Option<bool>,
+    archived: Option<bool>,
+    color: Option<String>,
+    delete: Option<bool>,
+) -> AppResult<u32> {
+    notes::bulk_update(
+        &state.db.lock(),
+        &ids,
+        pinned,
+        archived,
+        color.as_deref(),
+        delete.unwrap_or(false),
+    )
+}
+
+#[tauri::command]
+pub fn notes_export_markdown(state: State<'_, AppState>, id: String) -> AppResult<String> {
+    let note = notes::get_note(&state.db.lock(), &state.data_dir, &id)?;
+    Ok(notes::note_to_markdown(&note))
+}
+
+#[tauri::command]
+pub fn notes_search_ranked(
+    state: State<'_, AppState>,
+    query: String,
+) -> AppResult<Vec<NoteSummary>> {
+    notes::search_ranked(&state.db.lock(), &query)
+}
+
+#[tauri::command]
+pub fn notes_seed_sample(state: State<'_, AppState>) -> AppResult<Note> {
+    let body = serde_json::json!({
+        "type": "doc",
+        "content": [{
+            "type": "paragraph",
+            "content": [{
+                "type": "text",
+                "text": "This is a sample note. Edit or delete it anytime. Your data stays on this device unless you enable vault sync."
+            }]
+        }]
+    });
+    notes::upsert_note(
+        &state.db.lock(),
+        &state.data_dir,
+        NoteUpsert {
+            id: None,
+            title: "Welcome to DocTool".into(),
+            body,
+            color: Some("teal".into()),
+            pinned: Some(true),
+            archived: Some(false),
+            labels: Some(vec!["sample".into()]),
+        },
+    )
+}
+
+// ── Vault settings / backup / adaptive crypto ───────────
+
+#[tauri::command]
+pub fn vault_set_auto_lock(state: State<'_, AppState>, seconds: i64) -> AppResult<()> {
+    state
+        .db
+        .lock()
+        .set_meta("vault.auto_lock_seconds", &seconds.to_string())
+}
+
+#[tauri::command]
+pub fn vault_get_auto_lock(state: State<'_, AppState>) -> AppResult<i64> {
+    let v = state.db.lock().get_meta("vault.auto_lock_seconds")?;
+    Ok(v.and_then(|s| s.parse().ok()).unwrap_or(300))
+}
+
+/// Adaptive Argon2 memory suggestion based on available RAM (best-effort).
+#[tauri::command]
+pub fn crypto_recommend_kdf() -> serde_json::Value {
+    // Heuristic: try /proc/meminfo on Linux/Android
+    let mut mem_kib: u64 = 4 * 1024 * 1024; // assume 4 GiB
+    if let Ok(s) = std::fs::read_to_string("/proc/meminfo") {
+        for line in s.lines() {
+            if let Some(rest) = line.strip_prefix("MemAvailable:") {
+                let n: u64 = rest
+                    .split_whitespace()
+                    .next()
+                    .and_then(|x| x.parse().ok())
+                    .unwrap_or(0);
+                if n > 0 {
+                    mem_kib = n;
+                }
+                break;
+            }
+        }
+    }
+    // Use at most ~1/8 of available RAM, clamp 32–128 MiB
+    let m_mib = ((mem_kib / 1024) / 8).clamp(32, 128);
+    serde_json::json!({
+        "kdf": "Argon2id",
+        "recommendedMemoryMib": m_mib,
+        "iterations": 3,
+        "availableMemKib": mem_kib,
+    })
+}
+
+/// Export encrypted vault backup (header + objects + manifest as tar-like JSON pack).
+#[tauri::command]
+pub fn vault_export_backup(state: State<'_, AppState>) -> AppResult<String> {
+    let vault = state.vault.lock();
+    let session = vault.as_ref().ok_or(AppError::VaultLocked)?;
+    let header_json: String = {
+        let db = state.db.lock();
+        db.conn()
+            .query_row(
+                "SELECT header_json FROM vault_state WHERE id=1",
+                [],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .ok()
+            .flatten()
+            .ok_or(AppError::VaultNotConfigured)?
+    };
+    let manifest = session.manifest_json();
+    let mut objects = serde_json::Map::new();
+    let obj_dir = state.data_dir.join("vault_objects");
+    if obj_dir.is_dir() {
+        if let Ok(rd) = fs::read_dir(&obj_dir) {
+            for ent in rd.flatten() {
+                let name = ent.file_name().to_string_lossy().to_string();
+                if let Ok(bytes) = fs::read(ent.path()) {
+                    objects.insert(name, serde_json::Value::String(B64.encode(bytes)));
+                }
+            }
+        }
+    }
+    let pack = serde_json::json!({
+        "schema": "doctool-vault-backup-v1",
+        "exportedAt": now_iso(),
+        "headerJson": header_json,
+        "manifestEncB64": {
+            "path": "vault_manifest.enc",
+            "data": fs::read(state.data_dir.join("vault_manifest.enc")).ok().map(|b| B64.encode(b)),
+        },
+        "objects": objects,
+        // Note: backup is ciphertext-only; still requires password on import
+    });
+    let bytes = serde_json::to_vec(&pack).map_err(|e| AppError::internal(e))?;
+    Ok(B64.encode(bytes))
+}
+
+#[tauri::command]
+pub fn vault_import_backup(state: State<'_, AppState>, data_base64: String) -> AppResult<()> {
+    if state.vault.lock().is_some() {
+        return Err(AppError::validation("Lock vault before import"));
+    }
+    let bytes = B64
+        .decode(data_base64.as_bytes())
+        .map_err(|e| AppError::validation(e))?;
+    let pack: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|e| AppError::validation(e))?;
+    if pack.get("schema").and_then(|s| s.as_str()) != Some("doctool-vault-backup-v1") {
+        return Err(AppError::validation("Not a DocTool vault backup"));
+    }
+    let header_json = pack
+        .get("headerJson")
+        .and_then(|h| h.as_str())
+        .ok_or_else(|| AppError::validation("Missing header"))?;
+    {
+        let db = state.db.lock();
+        db.conn().execute(
+            "UPDATE vault_state SET configured=1, header_json=?1 WHERE id=1",
+            params![header_json],
+        )?;
+    }
+    if let Some(data) = pack
+        .pointer("/manifestEncB64/data")
+        .and_then(|d| d.as_str())
+    {
+        if let Ok(raw) = B64.decode(data.as_bytes()) {
+            fs::write(state.data_dir.join("vault_manifest.enc"), raw)?;
+        }
+    }
+    let obj_dir = state.data_dir.join("vault_objects");
+    fs::create_dir_all(&obj_dir)?;
+    if let Some(objs) = pack.get("objects").and_then(|o| o.as_object()) {
+        for (name, val) in objs {
+            if let Some(b64) = val.as_str() {
+                if let Ok(raw) = B64.decode(b64.as_bytes()) {
+                    fs::write(obj_dir.join(name), raw)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Drive OAuth link flag + placeholder token store (full OAuth in platform browser).
+#[tauri::command]
+pub fn drive_status(state: State<'_, AppState>) -> AppResult<serde_json::Value> {
+    let db = state.db.lock();
+    let linked: i64 = db
+        .conn()
+        .query_row("SELECT drive_linked FROM vault_state WHERE id=1", [], |r| {
+            r.get(0)
+        })
+        .unwrap_or(0);
+    let has_token = db.get_meta("drive.refresh_token_enc")?.is_some();
+    Ok(serde_json::json!({
+        "linked": linked != 0,
+        "hasToken": has_token,
+        "provider": "google_drive",
+        "note": "Set client credentials via settings; complete OAuth in system browser."
+    }))
+}
+
+#[tauri::command]
+pub fn drive_set_linked(state: State<'_, AppState>, linked: bool) -> AppResult<()> {
+    let db = state.db.lock();
+    db.conn().execute(
+        "UPDATE vault_state SET drive_linked=?1 WHERE id=1",
+        params![linked as i64],
+    )?;
+    if !linked {
+        let _ = db.set_meta("drive.refresh_token_enc", "");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn drive_store_token(state: State<'_, AppState>, refresh_token: String) -> AppResult<()> {
+    let sealed = seal_secret(&state.data_dir, "drive.refresh", &refresh_token)?;
+    let db = state.db.lock();
+    db.set_meta("drive.refresh_token_enc", &sealed)?;
+    db.conn()
+        .execute("UPDATE vault_state SET drive_linked=1 WHERE id=1", [])?;
+    Ok(())
+}
+
+/// WebDAV list (basic PROPFIND) — F7
+#[tauri::command]
+pub async fn webdav_list(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> AppResult<Vec<DirEntry>> {
+    let base = url.trim_end_matches('/');
+    let p = if path.starts_with('/') {
+        path.clone()
+    } else {
+        format!("/{path}")
+    };
+    let target = format!("{base}{p}");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::internal(e))?;
+    let body = r#"<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:getcontentlength/><d:resourcetype/><d:getlastmodified/></d:prop></d:propfind>"#;
+    let res = client
+        .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &target)
+        .basic_auth(&username, Some(&password))
+        .header("Depth", "1")
+        .header("Content-Type", "application/xml")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| AppError::internal(e))?;
+    if !res.status().is_success() && res.status().as_u16() != 207 {
+        return Err(AppError::internal(format!("WebDAV HTTP {}", res.status())));
+    }
+    let text = res.text().await.map_err(|e| AppError::internal(e))?;
+    // Minimal XML scrape for href + collection
+    let mut entries = Vec::new();
+    for part in text.split("<d:response").skip(1) {
+        let href = extract_xml(part, "d:href").or_else(|| extract_xml(part, "D:href"));
+        let Some(href) = href else { continue };
+        if href.trim_end_matches('/') == p.trim_end_matches('/') {
+            continue; // self
+        }
+        let is_dir = part.contains("collection") || href.ends_with('/');
+        let name = href
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or(&href)
+            .to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let decoded = urlencoding::decode(&name)
+            .map(|c| c.into_owned())
+            .unwrap_or(name);
+        entries.push(DirEntry {
+            name: decoded.clone(),
+            path: href.clone(),
+            is_dir,
+            size: None,
+            mtime: None,
+        });
+    }
+    Ok(entries)
+}
+
+fn extract_xml(s: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = s.find(&open)? + open.len();
+    let end = s[start..].find(&close)? + start;
+    Some(s[start..end].trim().to_string())
+}
+
+#[tauri::command]
+pub fn db_vacuum(state: State<'_, AppState>) -> AppResult<()> {
+    state.db.lock().conn().execute_batch("VACUUM;")?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn app_network_hint() -> serde_json::Value {
+    // Best-effort: try HEAD to a well-known endpoint with short timeout is heavy;
+    // frontend uses navigator.onLine — this returns platform note.
+    serde_json::json!({ "hint": "use_navigator_onLine" })
+}
+
+
+/// V6 — Change vault password (re-wrap MK with new password; recovery unchanged).
+#[tauri::command]
+pub fn vault_change_password(
+    state: State<'_, AppState>,
+    current_password: String,
+    new_password: String,
+) -> AppResult<()> {
+    let header_json: String = {
+        let db = state.db.lock();
+        db.conn()
+            .query_row(
+                "SELECT header_json FROM vault_state WHERE id=1",
+                [],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .ok()
+            .flatten()
+            .ok_or(AppError::VaultNotConfigured)?
+    };
+    let header: VaultHeader =
+        serde_json::from_str(&header_json).map_err(|e| AppError::crypto(e))?;
+    let mk = unlock_with_password(&header, &current_password)?;
+    let next = rewrap_password(&header, &mk, &new_password)?;
+    let next_json = serde_json::to_string(&next).map_err(|e| AppError::internal(e))?;
+    {
+        let db = state.db.lock();
+        db.conn().execute(
+            "UPDATE vault_state SET header_json=?1 WHERE id=1",
+            params![next_json],
+        )?;
+        db.conn().execute(
+            "UPDATE vault_secrets SET header_json=?1 WHERE id=1",
+            params![next_json],
+        )?;
+    }
+    // Keep session if already unlocked with same MK
+    Ok(())
+}
+

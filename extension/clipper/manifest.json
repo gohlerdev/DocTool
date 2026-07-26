@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "DocTool Clipper",
+  "version": "0.1.0",
+  "description": "Save the current page or selection to DocTool notes.",
+  "permissions": ["activeTab", "contextMenus", "storage"],
+  "action": {
+    "default_title": "Save to DocTool",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {}
+}

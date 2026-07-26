@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -13,6 +14,18 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Release signing (keystore.properties next to this module or parent)
+val keystorePropertiesFile =
+    listOf(
+        rootProject.file("keystore.properties"),
+        file("../keystore.properties"),
+        file("keystore.properties"),
+    ).firstOrNull { it.exists() }
+
+val keystoreProperties = Properties().apply {
+    keystorePropertiesFile?.let { FileInputStream(it).use { stream -> load(stream) } }
+}
+
 android {
     compileSdk = 36
     namespace = "com.doctool.app"
@@ -24,13 +37,27 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile != null) {
+                val storePath = keystoreProperties["storeFile"] as String
+                storeFile = file(storePath)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+            packaging {
+                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
@@ -38,6 +65,8 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))

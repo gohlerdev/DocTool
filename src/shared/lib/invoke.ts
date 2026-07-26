@@ -89,7 +89,22 @@ export const api = {
   }) => invoke<Note>("notes_upsert", { input }),
   notesDelete: (id: string, hard?: boolean) => invoke<void>("notes_delete", { id, hard }),
   notesSearch: (query: string) => invoke<NoteSummary[]>("notes_search", { query }),
+  notesSearchRanked: (query: string) =>
+    invoke<NoteSummary[]>("notes_search_ranked", { query }),
   notesSyncNow: () => invoke<{ pushed: number; pulled: number }>("notes_sync_now"),
+  notesLabels: () => invoke<string[]>("notes_labels"),
+  notesRestore: (id: string) => invoke<void>("notes_restore", { id }),
+  notesTrash: () => invoke<NoteSummary[]>("notes_trash"),
+  notesPurgeTrash: (days?: number) => invoke<number>("notes_purge_trash", { days }),
+  notesBulk: (opts: {
+    ids: string[];
+    pinned?: boolean;
+    archived?: boolean;
+    color?: string;
+    delete?: boolean;
+  }) => invoke<number>("notes_bulk", opts),
+  notesExportMarkdown: (id: string) => invoke<string>("notes_export_markdown", { id }),
+  notesSeedSample: () => invoke<Note>("notes_seed_sample"),
 
   fsDefaultRoot: () => invoke<string>("fs_default_root"),
   fsList: (path: string) => invoke<DirEntry[]>("fs_list", { path }),
@@ -125,6 +140,25 @@ export const api = {
   vaultPutFile: (logicalPath: string, dataBase64: string, kind?: string) =>
     invoke<string>("vault_put_file", { logicalPath, dataBase64, kind }),
   vaultGetFile: (logicalPath: string) => invoke<string>("vault_get_file", { logicalPath }),
+  vaultSetAutoLock: (seconds: number) => invoke<void>("vault_set_auto_lock", { seconds }),
+  vaultGetAutoLock: () => invoke<number>("vault_get_auto_lock"),
+  vaultExportBackup: () => invoke<string>("vault_export_backup"),
+  vaultImportBackup: (dataBase64: string) =>
+    invoke<void>("vault_import_backup", { dataBase64 }),
+  vaultChangePassword: (currentPassword: string, newPassword: string) =>
+    invoke<void>("vault_change_password", { currentPassword, newPassword }),
+  cryptoRecommendKdf: () =>
+    invoke<{ recommendedMemoryMib: number; iterations: number; availableMemKib: number }>(
+      "crypto_recommend_kdf"
+    ),
+  driveStatus: () =>
+    invoke<{ linked: boolean; hasToken: boolean; provider: string }>("drive_status"),
+  driveSetLinked: (linked: boolean) => invoke<void>("drive_set_linked", { linked }),
+  driveStoreToken: (refreshToken: string) =>
+    invoke<void>("drive_store_token", { refreshToken }),
+  webdavList: (opts: { url: string; username: string; password: string; path: string }) =>
+    invoke<DirEntry[]>("webdav_list", opts),
+  dbVacuum: () => invoke<void>("db_vacuum"),
 };
 
 export function b64Encode(text: string): string {

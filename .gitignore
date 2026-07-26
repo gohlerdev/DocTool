@@ -33,6 +33,11 @@ src-tauri/WixTools
 # Mobile
 *.jks
 *.keystore
+*.jks
+keystore/
+keystore.properties
+**/keystore.properties
+dist-apk/
 *.mobileprovision
 google-services.json
 **/local.properties
